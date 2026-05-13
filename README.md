@@ -20,6 +20,8 @@ Built for B2B SaaS teams who want AEO/GEO-formatted content (FAQ blocks, schema-
 - Flips Notion `Status` to `review`
 - Human reviews in Google Doc, approves, publishes manually
 
+> 💡 **Note:** This is **automation with an LLM step**, not an AI agent. Claude has one job (write the draft); n8n handles all the routing deterministically. See [`docs/automation-vs-agent.md`](docs/automation-vs-agent.md) for the trade-offs and when each architecture makes sense.
+
 ❌ **What it does NOT do (yet — see [Roadmap](#roadmap)):**
 - SERP research / web grounding (drafts rely on Brand Context + Claude's training)
 - Second-pass voice check (single-shot generation)
@@ -105,6 +107,7 @@ aeo-content-pipeline/
 │   ├── setup.md                    ← end-to-end setup walkthrough (~45 min)
 │   ├── notion-setup.md             ← Pipeline DB schema + Brand Context structure
 │   ├── architecture.md             ← detailed node-by-node flow
+│   ├── automation-vs-agent.md      ← why this is automation, not an AI agent (the trade-offs)
 │   ├── prompts.md                  ← how the Claude prompt is assembled (cache strategy)
 │   └── publishers.md               ← (roadmap) auto-publish patterns — not built yet
 ├── prompts/

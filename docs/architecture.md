@@ -286,6 +286,16 @@ For production hardening, add: 5xx retry on critical nodes, on-failure branch â†
 
 ---
 
+## Automation, not an AI agent
+
+This pipeline is **automation with an LLM step**, not an AI agent. Claude has exactly one job in the flow: write the draft. Every other decision (when to fetch Brand Context, when to write the Doc, when to update Notion status) is hardcoded as an n8n node.
+
+An agent version would give Claude tools (`read_brand_context`, `write_doc`, `update_notion_status`, etc.) and let it orchestrate itself. That's a different architecture with different trade-offs.
+
+For brand-voice content with predictable inputs, deterministic automation wins on cost, debuggability, and reproducibility. See [`automation-vs-agent.md`](automation-vs-agent.md) for the full comparison + when to choose each.
+
+---
+
 ## Why this specific architecture
 
 **Notion as editorial:** marketers live there, Brand Context is a living document the team maintains.
