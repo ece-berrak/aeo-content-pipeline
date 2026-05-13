@@ -1,0 +1,35 @@
+# Secrets and local config — credentials live in n8n's vault, never here
+.env
+.env.local
+*.secret
+*.credentials.json
+credentials.json
+.notion-keys
+
+# Local exports of customer-specific Brand Context
+brand-context.local.md
+*.local.md
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+
+# Node (if anyone adds tooling later)
+node_modules/
+dist/
+.turbo/
+
+# Python (same)
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# n8n local data (if anyone tests with a local n8n instance in this folder)
+.n8n/
+n8n-data/

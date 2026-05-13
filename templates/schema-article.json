@@ -1,0 +1,65 @@
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Article",
+      "@id": "{{canonical_url}}#article",
+      "headline": "{{title}}",
+      "description": "{{meta_description}}",
+      "datePublished": "{{published_at}}",
+      "dateModified": "{{updated_at}}",
+      "url": "{{canonical_url}}",
+      "mainEntityOfPage": {
+        "@type": "WebPage",
+        "@id": "{{canonical_url}}"
+      },
+      "author": {
+        "@type": "Person",
+        "name": "{{author}}",
+        "url": "{{author_url}}"
+      },
+      "publisher": {
+        "@type": "Organization",
+        "name": "{{brand_name}}",
+        "url": "{{brand_url}}",
+        "logo": {
+          "@type": "ImageObject",
+          "url": "{{brand_logo_url}}"
+        }
+      },
+      "image": "{{featured_image_url}}",
+      "keywords": "{{tags_csv}}",
+      "wordCount": "{{word_count}}",
+      "articleSection": "{{cluster}}"
+    },
+    {
+      "@type": "FAQPage",
+      "@id": "{{canonical_url}}#faq",
+      "mainEntity": "{{faq_entities_json}}"
+    },
+    {
+      "@type": "BreadcrumbList",
+      "@id": "{{canonical_url}}#breadcrumbs",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "position": 1,
+          "name": "{{brand_name}}",
+          "item": "{{brand_url}}"
+        },
+        {
+          "@type": "ListItem",
+          "position": 2,
+          "name": "Blog",
+          "item": "{{brand_url}}/blog/"
+        },
+        {
+          "@type": "ListItem",
+          "position": 3,
+          "name": "{{title}}",
+          "item": "{{canonical_url}}"
+        }
+      ]
+    }
+  ]
+}

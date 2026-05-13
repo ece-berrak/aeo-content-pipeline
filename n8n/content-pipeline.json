@@ -1,0 +1,434 @@
+{
+  "name": "Brand-aware Content Draft Generator (AEO-formatted)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 3
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        0
+      ],
+      "id": "00000000-0000-0000-0000-000000000001",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "00000000-0000-0000-0000-000000000002",
+              "name": "pipeline_database_id",
+              "value": "YOUR_NOTION_PIPELINE_DB_ID",
+              "type": "string"
+            },
+            {
+              "id": "00000000-0000-0000-0000-000000000003",
+              "name": "brand_context_page_id",
+              "value": "YOUR_NOTION_BRAND_CONTEXT_PAGE_ID",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        176,
+        192
+      ],
+      "id": "00000000-0000-0000-0000-000000000004",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "getAll",
+        "databaseId": {
+          "__rl": true,
+          "value": "YOUR_NOTION_PIPELINE_DB_ID",
+          "mode": "list",
+          "cachedResultName": "Pipeline Database",
+          "cachedResultUrl": "https://www.notion.so/YOUR_NOTION_PIPELINE_DB_ID"
+        },
+        "filterType": "manual",
+        "filters": {
+          "conditions": [
+            {
+              "key": "Status|status",
+              "condition": "equals",
+              "statusValue": "Queued"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        416,
+        0
+      ],
+      "id": "00000000-0000-0000-0000-000000000005",
+      "name": "Get many database pages",
+      "credentials": {
+        "notionApi": {
+          "id": "REPLACE_WITH_YOUR_NOTION_CREDENTIAL_ID",
+          "name": "Notion account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "block",
+        "operation": "getAll",
+        "blockId": {
+          "__rl": true,
+          "value": "https://www.notion.so/Brand-Context-YOUR_NOTION_BRAND_CONTEXT_PAGE_ID",
+          "mode": "url"
+        },
+        "returnAll": true,
+        "simplifyOutput": false
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        832,
+        16
+      ],
+      "id": "00000000-0000-0000-0000-000000000006",
+      "name": "Get many child blocks",
+      "credentials": {
+        "notionApi": {
+          "id": "REPLACE_WITH_YOUR_NOTION_CREDENTIAL_ID",
+          "name": "Notion account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "  // Extract ticket fields into clean variables for downstream nodes\n  const t = $input.first().json;\n  const props = t.properties || {};\n\n  const keyword = props.Keyword?.rich_text?.[0]?.plain_text\n    || t.property_keyword || '';\n  const type = props.Type?.select?.name\n    || t.property_type || 'Long-form blog';\n  const cluster = props.Cluster?.select?.name\n    || t.property_cluster || '';\n  const icp = (props['ICP slice']?.multi_select || [])\n    .map(s => s.name).join(', ')\n    || (Array.isArray(t.property_icp_slice) ? t.property_icp_slice.join(', ') : t.property_icp_slice || '');\n  const notes = props['Notes for AI']?.rich_text?.map(r => r.plain_text).join('')\n    || t.property_notes_for_ai || '';\n\n  return [{\n    json: {\n      ticket_id: t.id,\n      keyword,\n      type,\n      cluster,\n      icp_slice: icp,\n      notes_for_ai: notes,\n      page_url: t.url\n    }\n  }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        640,
+        208
+      ],
+      "id": "00000000-0000-0000-0000-000000000007",
+      "name": "Extract"
+    },
+    {
+      "parameters": {
+        "jsCode": "const brandBlocks = $('Get many child blocks').all();\n\nfunction blockToMd(j) {\n  if (!j || !j.type) return '';\n  var typeKey = j.type;\n  var blockData = j[typeKey];\n  if (!blockData) return '';\n  var rt = blockData.text || blockData.rich_text;\n  if (!Array.isArray(rt) || rt.length === 0) return '';\n  var text = rt.map(function(r) { return r.plain_text || ''; }).join('');\n  if (!text) return '';\n  if (typeKey === 'heading_1') return '# ' + text;\n  if (typeKey === 'heading_2') return '## ' + text;\n  if (typeKey === 'heading_3') return '### ' + text;\n  if (typeKey === 'bulleted_list_item') return '- ' + text;\n  if (typeKey === 'numbered_list_item') return '1. ' + text;\n  if (typeKey === 'callout') return '> ' + text;\n  if (typeKey === 'quote') return '> ' + text;\n  if (typeKey === 'toggle') return '> ' + text;\n  if (typeKey === 'code') return text;\n  return text;\n}\n\nconst brandMd = brandBlocks\n  .map(function(b) { return blockToMd(b.json); })\n  .filter(function(s) { return s && s.length > 0; })\n  .join('\\n\\n');\n\nconst ticket = $('Extract').first().json;\n\n// Brand Context block — cacheable (static across all tickets)\nconst brandContextText = '----- BRAND CONTEXT -----\\n\\n' + brandMd;\n\n// Ticket-specific block — changes every call\nconst ticketTaskText = '----- TICKET -----\\n\\n'\n  + 'Keyword: ' + (ticket.keyword || '(no keyword)')\n  + '\\nType: ' + (ticket.type || 'Long-form blog')\n  + '\\nCluster: ' + (ticket.cluster || '-')\n  + '\\nICP slice: ' + (ticket.icp_slice || '-')\n  + '\\nNotes for AI: ' + (ticket.notes_for_ai || '-')\n  + '\\n\\n----- TASK -----\\n\\n'\n  + 'Write one piece of content matching the Type and Brand Context section 9 format spec. '\n  + 'Output a single JSON object with these fields: title, slug, meta_title (max 60 chars), '\n  + 'meta_description (max 155 chars), body_markdown, body_html, tags, faq, '\n  + 'internal_links_suggested, schema_org_type, word_count. No prose outside the JSON.';\n\nconst systemPrompt = 'You are the content engine for the brand in the user message. '\n  + 'Always respond with one JSON object matching the schema. '\n  + 'Never output prose outside the JSON. '\n  + 'Follow Brand Context voice and never-say rules strictly.';\n\n// Brand Context goes in user message as content block with cache_control\n// (System field stays as string to avoid n8n / API edge cases)\nconst body = {\n  model: 'claude-sonnet-4-6',\n  max_tokens: 8000,\n  system: systemPrompt,\n  messages: [{\n    role: 'user',\n    content: [\n      {\n        type: 'text',\n        text: brandContextText,\n        cache_control: { type: 'ephemeral' }\n      },\n      {\n        type: 'text',\n        text: ticketTaskText\n      }\n    ]\n  }]\n};\n\nreturn [{\n  json: {\n    ticket_id: ticket.ticket_id,\n    keyword: ticket.keyword || '',\n    type: ticket.type || '',\n    brand_context_block_count: brandBlocks.length,\n    brand_context_md_length: brandMd.length,\n    brand_context_md: brandMd,\n    claude_request_body: JSON.stringify(body)\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        992,
+        208
+      ],
+      "id": "00000000-0000-0000-0000-000000000008",
+      "name": "Build Draft Code"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "anthropicApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.parse($json.claude_request_body) }}",
+        "options": {
+          "timeout": 180000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1200,
+        16
+      ],
+      "id": "00000000-0000-0000-0000-000000000009",
+      "name": "HTTP Request",
+      "credentials": {
+        "anthropicApi": {
+          "id": "REPLACE_WITH_YOUR_ANTHROPIC_CREDENTIAL_ID",
+          "name": "Anthropic account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Robust parser with debug fallback\nconst resp = $input.first().json;\nconst text = resp.content && resp.content[0] && resp.content[0].text;\n\nif (!text) {\n  throw new Error('Claude response missing text');\n}\n\n// Clean common issues\nlet cleaned = text.trim();\n// Strip markdown fences like ```json ... ```\ncleaned = cleaned.replace(/^```(?:json)?\\s*/i, '');\ncleaned = cleaned.replace(/\\s*```\\s*$/, '');\n\nlet draft = null;\nlet parseError = null;\n\ntry {\n  draft = JSON.parse(cleaned);\n} catch (e) {\n  parseError = e.message;\n  // Try extracting first balanced JSON object\n  var match = cleaned.match(/\\{[\\s\\S]*\\}/);\n  if (match) {\n    try {\n      draft = JSON.parse(match[0]);\n      parseError = null;\n    } catch (e2) {\n      parseError = e2.message;\n    }\n  }\n}\n\n// If parsing failed, return debug info instead of crashing\nif (!draft) {\n  return [{\n    json: {\n      PARSE_FAILED: true,\n      error: parseError,\n      raw_length: cleaned.length,\n      raw_first_500: cleaned.substring(0, 500),\n      raw_last_500: cleaned.substring(Math.max(0, cleaned.length - 500))\n    }\n  }];\n}\n\n// Success path\nconst meta = $('Build Draft Code').first().json;\n\nreturn [{\n  json: {\n    PARSE_FAILED: false,\n    ticket_id: meta.ticket_id,\n    keyword: meta.keyword,\n    title: draft.title || '',\n    slug: draft.slug || '',\n    meta_title: draft.meta_title || '',\n    meta_description: draft.meta_description || '',\n    body_markdown: draft.body_markdown || '',\n    body_html: draft.body_html || '',\n    word_count: draft.word_count || 0,\n    tags: Array.isArray(draft.tags) ? draft.tags : [],\n    faq: Array.isArray(draft.faq) ? draft.faq : [],\n    internal_links_suggested: Array.isArray(draft.internal_links_suggested) ? draft.internal_links_suggested : [],\n    schema_org_type: draft.schema_org_type || 'Article'\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1376,
+        208
+      ],
+      "id": "00000000-0000-0000-0000-000000000010",
+      "name": "Parse Response"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Build Google Doc Content\n// Takes parsed Claude draft + resolves ticket_id from upstream Notion node\n// Outputs: { ticket_id, title, doc_title, doc_content_text }\n\nconst draft = $input.first().json || {};\n\n// Resolve ticket_id (fallback chain across upstream nodes)\nlet ticketId = null;\nconst sources = [\n  function() { return $('Get many database pages').first().json.id; },\n  function() { return $('Extract').first().json.ticket_id; },\n  function() { return $('Extract').first().json.id; },\n  function() { return draft.ticket_id; },\n  function() { return $('Parse Response').first().json.ticket_id; },\n  function() { return $('Build Draft Code').first().json.ticket_id; }\n];\n\nfor (var i = 0; i < sources.length; i++) {\n  try {\n    var v = sources[i]();\n    if (v && typeof v === 'string' && v.length >= 32) {\n      ticketId = v;\n      break;\n    }\n  } catch (e) {}\n}\n\nif (!ticketId) {\n  throw new Error('Cannot resolve ticket_id from upstream nodes.');\n}\n\nconst title = draft.title || 'Untitled Draft';\nconst md = draft.body_markdown || '';\n\n// Build a single text blob for the Google Doc\nvar docText = '';\n\ndocText += title + '\\n\\n';\n\ndocText += 'Meta title: ' + (draft.meta_title || '-') + '\\n';\ndocText += 'Meta description: ' + (draft.meta_description || '-') + '\\n';\ndocText += 'Word count: ' + (draft.word_count || 0) + '\\n';\ndocText += 'Schema.org type: ' + (draft.schema_org_type || 'Article') + '\\n';\ndocText += '\\n----------\\n\\n';\n\ndocText += md + '\\n';\n\nif (Array.isArray(draft.faq) && draft.faq.length > 0) {\n  docText += '\\n----------\\n\\nFAQ\\n\\n';\n  draft.faq.forEach(function(qa) {\n    if (qa && qa.q) {\n      docText += 'Q: ' + qa.q + '\\n';\n      if (qa.a) docText += 'A: ' + qa.a + '\\n';\n      docText += '\\n';\n    }\n  });\n}\n\nreturn [{\n  json: {\n    ticket_id: ticketId,\n    title: title,\n    doc_title: title + ' — ' + new Date().toISOString().slice(0, 10),\n    doc_content_text: docText\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1584,
+        32
+      ],
+      "id": "00000000-0000-0000-0000-000000000011",
+      "name": "Build Google Doc Content"
+    },
+    {
+      "parameters": {
+        "folderId": "YOUR_GOOGLE_DRIVE_FOLDER_ID",
+        "title": "={{ $json.doc_title }}"
+      },
+      "type": "n8n-nodes-base.googleDocs",
+      "typeVersion": 2,
+      "position": [
+        1744,
+        208
+      ],
+      "id": "00000000-0000-0000-0000-000000000012",
+      "name": "Create a document",
+      "credentials": {
+        "googleDocsOAuth2Api": {
+          "id": "REPLACE_WITH_YOUR_GOOGLE_DOCS_CREDENTIAL_ID",
+          "name": "Google Docs account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentURL": "={{ $json.id }}",
+        "actionsUi": {
+          "actionFields": [
+            {
+              "action": "insert",
+              "text": "={{ $('Build Google Doc Content').first().json.doc_content_text }}\n"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.googleDocs",
+      "typeVersion": 2,
+      "position": [
+        1952,
+        48
+      ],
+      "id": "00000000-0000-0000-0000-000000000013",
+      "name": "Update a document",
+      "credentials": {
+        "googleDocsOAuth2Api": {
+          "id": "REPLACE_WITH_YOUR_GOOGLE_DOCS_CREDENTIAL_ID",
+          "name": "Google Docs account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "=https://api.notion.com/v1/pages/{{ $('Build Google Doc Content').first().json.ticket_id }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "notionApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "notion-version",
+              "value": "2022-06-28"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ ({\n    properties: {\n      \"Draft Attached\": {\n        url: \"https://docs.google.com/document/d/\" + $('Create a document').first().json.id + \"/edit\"\n      },\n      Status: {\n        status: { name: \"review\" }\n      }\n    }\n  }) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        2160,
+        208
+      ],
+      "id": "00000000-0000-0000-0000-000000000014",
+      "name": "Update Notion Page Property",
+      "credentials": {
+        "notionApi": {
+          "id": "REPLACE_WITH_YOUR_NOTION_CREDENTIAL_ID",
+          "name": "Notion account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Get many database pages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get many database pages": {
+      "main": [
+        [
+          {
+            "node": "Extract",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get many child blocks": {
+      "main": [
+        [
+          {
+            "node": "Build Draft Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract": {
+      "main": [
+        [
+          {
+            "node": "Get many child blocks",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Build Draft Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Draft Code": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Parse Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Response": {
+      "main": [
+        [
+          {
+            "node": "Build Google Doc Content",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Google Doc Content": {
+      "main": [
+        [
+          {
+            "node": "Create a document",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create a document": {
+      "main": [
+        [
+          {
+            "node": "Update a document",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update a document": {
+      "main": [
+        [
+          {
+            "node": "Update Notion Page Property",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "tags": []
+}
